@@ -90,8 +90,11 @@ public abstract class CameraActivity extends Activity
     private byte[] lastPreviewFrame;
 
     protected int[] getRgbBytes() {
-        imageConverter.run();
-        return rgbBytes;
+        if (imageConverter != null) {
+            imageConverter.run();
+            return rgbBytes;
+        }
+        return null;
     }
 
     protected int getLuminanceStride() {

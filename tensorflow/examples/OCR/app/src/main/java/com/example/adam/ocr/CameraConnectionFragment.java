@@ -423,6 +423,7 @@ public class CameraConnectionFragment extends Fragment {
         throw new RuntimeException("Time out waiting to lock camera opening.");
       }
       manager.openCamera(cameraId, stateCallback, backgroundHandler);
+
     } catch (final CameraAccessException e) {
       LOGGER.e(e, "Exception!");
     } catch (final InterruptedException e) {

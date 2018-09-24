@@ -24,6 +24,6 @@
         android:id="@+id/button_image"
         android:layout_width="wrap_content"
         android:layout_height="48dp"
-
-        android:text="Take a picture"/>
+        android:onClick="takePicture"
+        android:text="Take a picture!"/>
 </FrameLayout>

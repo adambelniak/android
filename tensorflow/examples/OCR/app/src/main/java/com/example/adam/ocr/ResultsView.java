@@ -18,6 +18,6 @@ package com.example.adam.ocr;
 
 import java.util.List;
 
-public interface ResultsView {
+public interface  ResultsView {
   public void setResults(final List<Classifier.Recognition> results);
 }

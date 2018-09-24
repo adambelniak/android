@@ -17,6 +17,8 @@ package com.example.adam.ocr;
 
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.os.Environment;
 import android.os.SystemClock;
 import android.os.Trace;
@@ -25,10 +27,16 @@ import android.util.Log;
 import org.datavec.image.loader.NativeImageLoader;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
+import org.opencv.android.Utils;
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
@@ -124,29 +132,43 @@ public class TensorFlowImageSegmentation implements Classifier {
   }
 
   @Override
-  public List<Recognition> recognizeImage(final Bitmap bitmap) {
+  public List<Bitmap> recognizeImage(Bitmap bitmap, AssetManager am) {
     // Log this method so that it can be analyzed with systrace.
-    Trace.beginSection("recognizeImage");
 
     Trace.beginSection("preprocessBitmap");
-    // Preprocess the image data from 0-255 int to normalized float based
-    // on the provided parameters.
-    Log.i("Size: %s", Double.toString(bitmap.getWidth()));
-    Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap,inputWidth, inputHeight, true);
+
+    Mat input = new Mat();
+    Mat outputImage = new Mat();
+
+    Utils.bitmapToMat(bitmap, outputImage, true);
+    Utils.bitmapToMat(bitmap, input, true);
+
+
+    Core.transpose(input, input);
+    Core.flip(input, input, +1);
+    input.copyTo(outputImage);
+    Imgproc.resize(input, input, new Size(inputWidth, inputHeight), 0, 0, Imgproc.INTER_AREA); //resize image
+
+    Bitmap scaledBitmap = Bitmap.createBitmap(input.cols(), input.rows(), Bitmap.Config.ARGB_8888);
+    Utils.matToBitmap(input, scaledBitmap);
+    Imgcodecs.imwrite(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES) + "/filename2.jpg", input);
+
     scaledBitmap.getPixels(intValues, 0, scaledBitmap.getWidth(), 0, 0, scaledBitmap.getWidth(), scaledBitmap.getHeight());
     for (int i = 0; i < intValues.length; ++i) {
       final int val = intValues[i];
-      floatValues[i * 3 + 0] = (((val >> 16) & 0xFF) - imageMean) / imageStd;
+      floatValues[i * 3 + 2] = (((val >> 16) & 0xFF) - imageMean) / imageStd;
       floatValues[i * 3 + 1] = (((val >> 8) & 0xFF) - imageMean) / imageStd;
-      floatValues[i * 3 + 2] = ((val & 0xFF) - imageMean) / imageStd;
+      floatValues[i * 3 + 0] = ((val & 0xFF) - imageMean) / imageStd;
     }
     Trace.endSection();
     prob_value[0] = 1;
+    float[] thresh = new float[] {0.3f};
     keep_prob = "keep_prob";
     // Copy the input data into TensorFlow.
     Trace.beginSection("feed");
     inferenceInterface.feed(inputName, floatValues, 1, inputHeight, inputWidth, 3);
     inferenceInterface.feed(keep_prob, prob_value, 1);
+    inferenceInterface.feed("thresh",  thresh, 1);
 
     Trace.endSection();
 
@@ -161,40 +183,56 @@ public class TensorFlowImageSegmentation implements Classifier {
     inferenceInterface.fetch(outputNames[1], outputsMask2);
 
       Trace.endSection();
-//    INDArray nd = Nd4j.create(outputs, new int[]{inputHeight, inputWidth, 1});
-//      for (int i = 0; i < 3; i++) {
-//          INDArray segmentation = nd.getColumn(0);
-//          INDArray image = segmentation.reshape(new int[]{inputHeight, inputWidth});
-//          BooleanIndexing.replaceWhere(image, 1.0, Conditions.greaterThan(0.33));
-//          BooleanIndexing.replaceWhere(image, 0.0, Conditions.lessThan(0.33));
-//          image = image.mul(255);
-//    NativeImageLoader loader = new NativeImageLoader();
-//              Log.i(TAG, "Saved:");
-    final long startTime = SystemClock.uptimeMillis();
 
-    Mat cv_image = new Mat(new Size(inputWidth, inputHeight), CvType.CV_8UC1, new Scalar(outputsMask2));
-    double lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
-    Log.i("Process: %s", Double.toString(lastProcessingTimeMs));
-//          boolean saved = opencv_imgcodecs.imwrite("faceDetection.png", cv_image);
+      Mat cv_image = new Mat(inputHeight, inputWidth, CvType.makeType(CvType.CV_8UC1, 1));
+    cv_image.put(0, 0, outputsMask1);
+
+
     List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
     Mat mHierarchy = new Mat();
+    Size sz = new Size(bitmap.getHeight(), bitmap.getWidth());
+    Imgproc.resize(cv_image, cv_image, sz);
     Imgproc.findContours(cv_image, contours, mHierarchy, Imgproc.RETR_EXTERNAL,Imgproc.CHAIN_APPROX_SIMPLE);
-    Log.i("amount of contours: %s", String.valueOf(contours.size()));
     Mat cropped;
+    Rect largestRect = null;
     if (isExternalStorageWritable()) {
       for (MatOfPoint contour : contours) {
-        cropped = new Mat(cv_image, Imgproc.boundingRect(contour));
-        Size sz = new Size(inputWidth * 4, inputHeight * 4);
-        Imgproc.resize(cropped, cropped, sz);
-        boolean saved = Imgcodecs.imwrite(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES) + "/filename.jpg", cropped);
-        Log.i("saved: %s", String.valueOf(saved));
+        Rect boundingRect = Imgproc.boundingRect(contour);
+        if (largestRect == null) {
+          largestRect = boundingRect;
+        }
+        else if (largestRect.area() < boundingRect.area()) {
+          largestRect = boundingRect;
+        }
       }
     }
+    if (largestRect == null) {
+      return null;
+    }
+
+    cropped = new Mat(outputImage, largestRect);
+    int height = outputImage.height() - largestRect.y - (largestRect.height) + 200;
+    int x = largestRect.x - 150;
+    int y = largestRect.y + largestRect.height - 200;
+    Rect labelData = new Rect(x, y,
+            x + largestRect.width + 500 >= outputImage.width() ? outputImage.width() - 10 - x: largestRect.width + 500, y + height >= outputImage.height()   ?
+            outputImage.height() - y- 10 : height);
+
+    Mat croppedLabel = new Mat(outputImage, labelData);
 
 
+    scaledBitmap = Bitmap.createBitmap(cropped.cols(), cropped.rows(), Bitmap.Config.ARGB_8888);
+    Utils.matToBitmap(cropped, scaledBitmap);
+
+    Bitmap scaledLabelBitmap = Bitmap.createBitmap(croppedLabel.cols(), croppedLabel.rows(), Bitmap.Config.ARGB_8888);
+    Utils.matToBitmap(croppedLabel, scaledLabelBitmap);
+
+    Imgcodecs.imwrite(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES) + "/filename.jpg", croppedLabel);
 
       // Find the best classifications.
-    final ArrayList<Recognition> recognitions = new ArrayList<Recognition>();
+    final ArrayList<Bitmap> recognitions = new ArrayList<Bitmap>();
+    recognitions.add(scaledBitmap);
+    recognitions.add(scaledLabelBitmap);
 
     Trace.endSection(); // "recognizeImage"
     return recognitions;

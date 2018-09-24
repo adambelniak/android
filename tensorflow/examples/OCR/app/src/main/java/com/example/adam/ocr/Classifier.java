@@ -15,6 +15,7 @@ limitations under the License.
 
 package com.example.adam.ocr;
 
+import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.RectF;
 
@@ -98,7 +99,7 @@ public interface Classifier {
     }
   }
 
-  List<Recognition> recognizeImage(Bitmap bitmap);
+  List<Bitmap> recognizeImage(Bitmap bitmap, AssetManager am);
   boolean classifyImage(Bitmap bitmap);
   boolean segmentationImage(Bitmap bitmap);
 

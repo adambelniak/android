@@ -74,7 +74,7 @@ public class ImageClassification implements Classifier {
         c.inferenceInterface = new TensorFlowInferenceInterface(assetManager, modelFilename);
 
         // The shape of the output is [N, NUM_CLASSES], where N is the batch size.
-        final Operation test = c.inferenceInterface.graphOperation(inputName);
+//        final Operation test = c.inferenceInterface.graphOperation(inputName);
         c.labels.add("good_quality");
         c.labels.add("bad_quality");
 
@@ -97,7 +97,7 @@ public class ImageClassification implements Classifier {
     }
 
     @Override
-    public List<Recognition> recognizeImage(Bitmap bitmap) {
+    public List<Bitmap> recognizeImage(Bitmap bitmap, AssetManager am) {
         return null;
     }
 

@@ -1,6 +1,8 @@
 apply plugin: 'com.android.application'
 
 android {
+    signingConfigs {
+    }
     compileSdkVersion 28
     defaultConfig {
         applicationId "com.example.adam.ocr"
@@ -29,21 +31,19 @@ dependencies {
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
     compile 'org.tensorflow:tensorflow-android:+'
     implementation project(':openCVLibrary310')
-    compile (group: 'org.deeplearning4j', name: 'deeplearning4j-core', version: '1.0.0-SNAPSHOT') {
+    compile('org.deeplearning4j:deeplearning4j-core:1.0.0-SNAPSHOT') {
         exclude group: 'org.bytedeco.javacpp-presets', module: 'opencv-platform'
         exclude group: 'org.bytedeco.javacpp-presets', module: 'leptonica-platform'
         exclude group: 'org.bytedeco.javacpp-presets', module: 'hdf5-platform'
     }
-    compile group: 'org.nd4j', name: 'nd4j-native', version: '1.0.0-SNAPSHOT'
-    compile group: 'org.nd4j', name: 'nd4j-native', version: '1.0.0-SNAPSHOT', classifier: "android-arm"
-    compile group: 'org.nd4j', name: 'nd4j-native', version: '1.0.0-SNAPSHOT', classifier: "android-arm64"
-    compile group: 'org.bytedeco.javacpp-presets', name: 'opencv', version: '3.4.2-1.4.2'
-    compile group: 'org.bytedeco.javacpp-presets', name: 'opencv', version: '3.4.2-1.4.2', classifier: "android-arm"
-    compile group: 'org.bytedeco.javacpp-presets', name: 'opencv', version: '3.4.2-1.4.2', classifier: "android-arm64"
-    compile group: 'org.bytedeco.javacpp-presets', name: 'openblas', version: '0.3.0-1.4.2'
-    compile group: 'org.bytedeco.javacpp-presets', name: 'openblas', version: '0.3.0-1.4.2', classifier: "android-arm"
-    compile group: 'org.bytedeco.javacpp-presets', name: 'openblas', version: '0.3.0-1.4.2', classifier: "android-arm64"
-
+    compile 'org.nd4j:nd4j-native:1.0.0-SNAPSHOT'
+    compile 'org.nd4j:nd4j-native:1.0.0-SNAPSHOT'
+    compile 'org.nd4j:nd4j-native:1.0.0-SNAPSHOT'
+    compile 'org.bytedeco.javacpp-presets:opencv:3.4.2-1.4.2'
+    compile 'org.bytedeco.javacpp-presets:opencv:3.4.2-1.4.2'
+    compile 'org.bytedeco.javacpp-presets:opencv:3.4.2-1.4.2'
+    compile 'org.bytedeco.javacpp-presets:openblas:0.3.0-1.4.2'
+    compile 'org.bytedeco.javacpp-presets:openblas:0.3.0-1.4.2'
+    compile 'org.bytedeco.javacpp-presets:openblas:0.3.0-1.4.2'
     implementation 'com.google.android.gms:play-services-vision:15.0.0'
-
 }
