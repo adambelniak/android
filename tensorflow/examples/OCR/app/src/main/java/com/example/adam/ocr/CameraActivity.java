@@ -41,10 +41,15 @@ import android.view.KeyEvent;
 import android.view.Surface;
 import android.view.WindowManager;
 import android.widget.Toast;
+
+import java.io.File;
 import java.nio.ByteBuffer;
 import com.example.adam.ocr.env.ImageUtils;
 import com.example.adam.ocr.env.Logger;
 import com.example.adam.ocr.R; // Explicit import needed for internal Google builds.
+import com.google.android.gms.vision.CameraSource;
+
+import static android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE;
 
 
 public abstract class CameraActivity extends Activity
@@ -72,6 +77,10 @@ public abstract class CameraActivity extends Activity
     private Runnable postInferenceCallback;
     private Runnable imageConverter;
 
+    protected boolean turnFlash;
+
+    protected Camera.PictureCallback mPicture;
+    protected Camera mCamera;
     @Override
     protected void onCreate(final Bundle savedInstanceState) {
         LOGGER.d("onCreate " + this);
@@ -118,7 +127,10 @@ public abstract class CameraActivity extends Activity
         try {
             // Initialize the storage bitmaps once when the resolution is known.
             if (rgbBytes == null) {
-                Camera.Size previewSize = camera.getParameters().getPreviewSize();
+                final Camera.Parameters p = camera.getParameters();
+
+                Camera.Size previewSize = p.getPreviewSize();
+                p.setPictureSize(previewWidth, previewHeight);
                 previewHeight = previewSize.height;
                 previewWidth = previewSize.width;
                 rgbBytes = new int[previewWidth * previewHeight];
@@ -128,6 +140,11 @@ public abstract class CameraActivity extends Activity
             LOGGER.e(e, "Exception!");
             return;
         }
+
+        final Camera.Parameters p = camera.getParameters();
+        p.setFlashMode(turnFlash ? Camera.Parameters.FLASH_MODE_TORCH : Camera.Parameters.FLASH_MODE_OFF);
+        camera.setParameters(p);
+        mCamera = camera;
 
         isProcessingFrame = true;
         lastPreviewFrame = bytes;
@@ -362,7 +379,7 @@ public abstract class CameraActivity extends Activity
         }
 
         Fragment fragment;
-        if (useCamera2API) {
+        if (false) {
             CameraConnectionFragment camera2Fragment =
                     CameraConnectionFragment.newInstance(
                             new CameraConnectionFragment.ConnectionCallback() {

@@ -21,11 +21,14 @@ import android.content.Intent;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
+import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.graphics.RectF;
+import android.hardware.Camera;
 import android.media.ImageReader.OnImageAvailableListener;
 import android.os.Environment;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseArray;
@@ -50,6 +53,7 @@ import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 
 public class ClassifierActivity extends CameraActivity implements OnImageAvailableListener {
@@ -79,7 +83,7 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
   private static final String OUTPUT_NAME_SEGMENTATION_1 = "mask_1";
   private static final String OUTPUT_NAME_SEGMENTATION_2 = "mask_2";
   private static final String TAG_SEGMANTATION = "TensorFlowImageSegmentation";
-  private static final String MODEL_FILE_SEGMENTATION = "file:///android_asset/saved_model/frozen_ocr.pb";
+  private static final String MODEL_FILE_SEGMENTATION = "file:///android_asset/saved_model/opt_frozen_ocr.pb";
 
 
   private static final int INPUT_SIZE_HEIGHT = 1024;
@@ -105,9 +109,9 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
   private Integer sensorOrientation;
   private Classifier classifier;
   private Classifier segmentation;
-
-  private Matrix frameToCropTransform;
-  private Matrix cropToFrameTransform;
+  private Bitmap imageToProcess = null;
+//  private Matrix frameToCropTransform;
+//  private Matrix cropToFrameTransform;
   private boolean isProcessingFrame = false;
   BarcodeDetector detector;
   TextRecognizer textRecognizer;
@@ -136,7 +140,8 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
     final float textSizePx = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, TEXT_SIZE_DIP, getResources().getDisplayMetrics());
 
-
+    String android_id = Settings.Secure.getString(getApplicationContext().getContentResolver(), Settings.Secure.ANDROID_ID);
+    LOGGER.i("something %s",  android_id);
 
     segmentation =
             TensorFlowImageSegmentation.create(
@@ -150,6 +155,48 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
                     INPUT_NAME_SEGMENTATION,
                     new String[] {OUTPUT_NAME_SEGMENTATION_1, OUTPUT_NAME_SEGMENTATION_2});
 
+    classifier =
+            ImageClassification.create(
+                    getAssets(),
+                    MODEL_FILE,
+                    LABEL_FILE,
+                    INPUT_SIZE_WIDTH_SEGMENTATION,
+                    INPUT_SIZE_HEIGHT_SEGMENTATION,
+                    IMAGE_MEAN,
+                    IMAGE_STD,
+                    INPUT_NAME_SEGMENTATION,
+                    new String[] {OUTPUT_NAME});
+
+    mPicture = new Camera.PictureCallback() {
+
+      @Override
+      public void onPictureTaken(byte[] data, Camera camera) {
+        try {
+          LOGGER.d("dziala " + this);
+          final long startTime = SystemClock.uptimeMillis();
+          Bitmap rgbFrameBitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+          imageToProcess = rgbFrameBitmap;
+
+          lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
+          LOGGER.i("Time: %s", lastProcessingTimeMs);
+//        Bitmap picture = BitmapFactory.decodeByteArray(data, 0, data.length);
+//        mCamera.startPreview();
+          try {
+            mCamera.startPreview();
+          } catch (Exception e) {
+            LOGGER.e("Start preview error");
+
+          }
+        }
+        catch (Exception e) {
+          mCamera.startPreview();
+
+        }
+
+      }
+    };
+
+
     previewWidth = size.getWidth();
     previewHeight = size.getHeight();
     LOGGER.i("camera size: %s",  size.getHeight());
@@ -160,14 +207,14 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
     LOGGER.i("Initializing at size %dx%d", previewWidth, previewHeight);
     rgbFrameBitmap = Bitmap.createBitmap(previewWidth, previewHeight, Config.ARGB_8888);
     croppedBitmap = Bitmap.createBitmap(previewWidth, previewHeight, Config.ARGB_8888);
-
-    frameToCropTransform = ImageUtils.getTransformationMatrix(
-        previewWidth, previewHeight,
-            INPUT_SIZE_WIDTH, INPUT_SIZE_HEIGHT,
-        sensorOrientation, MAINTAIN_ASPECT);
-
-    cropToFrameTransform = new Matrix();
-    frameToCropTransform.invert(cropToFrameTransform);
+//
+//    frameToCropTransform = ImageUtils.getTransformationMatrix(
+//        previewWidth, previewHeight,
+//            INPUT_SIZE_WIDTH, INPUT_SIZE_HEIGHT,
+//        sensorOrientation, MAINTAIN_ASPECT);
+//
+//    cropToFrameTransform = new Matrix();
+//    frameToCropTransform.invert(cropToFrameTransform);
     detector =
             new BarcodeDetector.Builder(getApplicationContext())
                     .setBarcodeFormats(Barcode.DATA_MATRIX | Barcode.EAN_13)
@@ -180,16 +227,19 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
 
 
   public void takePicture(View view) {
-
       isProcessingFrame = true;
-
     }
+
+  public void setFlashMode(View view) {
+    turnFlash = !turnFlash;
+  }
 
     public void test(){}
 
   @Override
   protected void processImage() {
-    if(isProcessingFrame) {
+
+    if(imageToProcess != null) {
       final ProgressDialog progress = new ProgressDialog(this);
       progress.setTitle("Processing Image");
       progress.setMessage("Wait while loading...");
@@ -197,16 +247,25 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
       progress.show();
 
       final AssetManager am = this.getAssets();
+
       final Intent intent = new Intent(this, PreviewActivity.class);
       final ByteArrayOutputStream bStream = new ByteArrayOutputStream();
       runInBackground(
                 new Runnable() {
                     @Override
                     public void run() {
+//                      Bitmap bitmapO = null;
+//                      try {
+//                        bitmapO = BitmapFactory.decodeStream(am.open("IMG_0320.JPG"));
+//                      }
+//                      catch (IOException e){
+//
+//                      }
                       final long startTime = SystemClock.uptimeMillis();
                       String barCode = null;
                       String date = null;
-                      rgbFrameBitmap.setPixels(getRgbBytes(), 0, previewWidth, 0, 0, previewWidth, previewHeight);
+//                      rgbFrameBitmap.setPixels(getRgbBytes(), 0, previewWidth, 0, 0, previewWidth, previewHeight);
+                      Bitmap rgbFrameBitmap = imageToProcess;
                         List<Bitmap> segments = segmentation.recognizeImage(rgbFrameBitmap, am);
                         if (segments != null) {
                           Bitmap bitmap = segments.get(0);
@@ -219,6 +278,7 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
                           bitmap = Bitmap.createBitmap(input.cols(), input.rows(), Bitmap.Config.ARGB_8888);
 
                           Utils.matToBitmap(input, bitmap);
+//                          Imgcodecs.imwrite(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES) + "/filename5.jpg", input);
 
                           Frame frame = new Frame.Builder().setBitmap(bitmap).build();
                           SparseArray<Barcode> barcodes = detector.detect(frame);
@@ -232,7 +292,7 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
                             RectF rect = new RectF(thisCode.getBoundingBox());
                             intent.putExtra(BAR_CODE_RECT, rect);
                             //Compress it before sending it to minimize the size and quality of bitmap.
-                              Imgcodecs.imwrite(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES) + "/filename4.jpg", input);
+//                              Imgcodecs.imwrite(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES) + "/filename4.jpg", input);
 
 
 
@@ -254,10 +314,9 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
                         bitmap = Bitmap.createBitmap(input.cols(), input.rows(), Bitmap.Config.ARGB_8888);
                         Utils.matToBitmap(input, bitmap);
                         Frame frame = new Frame.Builder().setBitmap(bitmap).build();
-                        Imgcodecs.imwrite(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES) + "/filename4.jpg", input);
+//                        Imgcodecs.imwrite(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES) + "/filename4.jpg", input);
 
                         SparseArray<TextBlock> text = textRecognizer.detect(frame);
-
                         if (text.size() > 0) {
                           bitmap.compress(Bitmap.CompressFormat.PNG, 100, bStream);
                           byte[] byteArray = bStream.toByteArray();
@@ -270,9 +329,9 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
                             if (blok != null) {
                               for (Text currentText : blok.getComponents()) {
                                 LOGGER.i("Value: %s", currentText.getValue());
-                                if (currentText.getValue() != null && currentText.getValue().matches("[0-9 .]+")) {
-                                  date = currentText.getValue();
-                                  rect = new RectF(currentText.getBoundingBox());
+                                if (currentText.getValue() != null && blok.getValue().matches("[0-9 .]+")) {
+                                  date = blok.getValue();
+                                  rect = new RectF(blok.getBoundingBox());
                                 }
                               }
 
@@ -293,14 +352,40 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
                         startActivity(intent);
                       }
                       else {
+                        imageToProcess = null;
+                        mCamera.startPreview();
                         readyForNextImage();
                       }
                     }
                 });
     }
     else {
-        readyForNextImage();
+      this.findDocument();
     }
+  }
+
+
+  public void findDocument() {
+
+      runInBackground(
+              new Runnable() {
+                @Override
+                public void run() {
+                  final long startTime = SystemClock.uptimeMillis();
+                  rgbFrameBitmap.setPixels(getRgbBytes(), 0, previewWidth, 0, 0, previewWidth, previewHeight);
+                  boolean result = classifier.classifyImage(rgbFrameBitmap);
+                  lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
+                  LOGGER.i("Time: %s", lastProcessingTimeMs);
+                  LOGGER.i("Value: %s", result);
+                  if (result) {
+//                    imageToProcess = rgbFrameBitmap;
+                    mCamera.takePicture(null, null, mPicture);
+                  }
+
+                  readyForNextImage();
+                }
+              });
+
   }
 
   public Bitmap transformImage(Bitmap bitmap, boolean adaptive){

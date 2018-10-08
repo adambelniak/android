@@ -20,10 +20,13 @@
     android:layout_height="match_parent"
     android:background="#000"
     tools:context="com.example.adam.ocr.CameraActivity" >
+
     <Button
-        android:id="@+id/button_image"
+        android:id="@+id/buttonFlashlight"
         android:layout_width="wrap_content"
-        android:layout_height="48dp"
-        android:onClick="takePicture"
-        android:text="Take a picture!"/>
+        android:layout_height="wrap_content"
+        android:layout_centerVertical="true"
+        android:layout_centerHorizontal="true"
+        android:onClick="setFlashMode"
+        android:text="Torch" />
 </FrameLayout>

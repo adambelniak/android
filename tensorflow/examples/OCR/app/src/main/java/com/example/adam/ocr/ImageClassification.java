@@ -2,12 +2,19 @@ package com.example.adam.ocr;
 
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
+import android.os.Environment;
 import android.os.SystemClock;
 import android.os.Trace;
 import android.util.Log;
 
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.core.Size;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
 import org.tensorflow.Operation;
 import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 
@@ -105,21 +112,33 @@ public class ImageClassification implements Classifier {
     public boolean classifyImage(final Bitmap bitmap) {
         // Log this method so that it can be analyzed with systrace.
         Trace.beginSection("recognizeImage");
-        final long startTime = SystemClock.uptimeMillis();
 
         Trace.beginSection("preprocessBitmap");
         // Preprocess the image data from 0-255 int to normalized float based
         // on the provided parameters.
-        Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap,inputWidth, inputHeight, true);
+        Mat input = new Mat();
+        Mat outputImage = new Mat();
+
+        Utils.bitmapToMat(bitmap, outputImage, true);
+        Utils.bitmapToMat(bitmap, input, true);
+
+
+        Core.transpose(input, input);
+        Core.flip(input, input, +1);
+        Imgproc.resize(input, input, new Size(inputWidth, inputHeight), 0, 0, Imgproc.INTER_NEAREST); //resize image
+
+        Bitmap scaledBitmap = Bitmap.createBitmap(input.cols(), input.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(input, scaledBitmap);
+
         scaledBitmap.getPixels(intValues, 0, scaledBitmap.getWidth(), 0, 0, scaledBitmap.getWidth(), scaledBitmap.getHeight());
         for (int i = 0; i < intValues.length; ++i) {
             final int val = intValues[i];
-            floatValues[i * 3 + 0] = (((val >> 16) & 0xFF) - imageMean) / imageStd;
-            floatValues[i * 3 + 1] = (((val >> 8) & 0xFF) - imageMean) / imageStd;
-            floatValues[i * 3 + 2] = ((val & 0xFF) - imageMean) / imageStd;
+            floatValues[i * 3 + 0] = (((val >> 16) & 0xFF) ) / imageStd;
+            floatValues[i * 3 + 1] = (((val >> 8) & 0xFF) ) / imageStd;
+            floatValues[i * 3 + 2] = ((val & 0xFF) ) / imageStd;
         }
-        long lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
-        Log.i("Detect: %s", Long.toString(lastProcessingTimeMs));
+        final long startTime = SystemClock.uptimeMillis();
+
         Trace.endSection();
         prob_value[0] = 1;
         keep_prob = "keep_prob";
@@ -141,7 +160,8 @@ public class ImageClassification implements Classifier {
         Trace.beginSection("fetch");
         inferenceInterface.fetch(outputNames[0], outputs);
         Trace.endSection();
-
+        long lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
+        Log.i("Cnn time working: %s", Long.toString(lastProcessingTimeMs));
         // Find the best classifications.
 
 //        PriorityQueue<Recognition> pq =
@@ -167,7 +187,7 @@ public class ImageClassification implements Classifier {
 //            recognitions.add(pq.poll());
 //        }
         Trace.endSection(); // "recognizeImage"
-        return outputs[1] > 0.95;
+        return outputs[0] > 0.75;
     }
 
     @Override

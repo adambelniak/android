@@ -23,6 +23,7 @@ import android.hardware.Camera.CameraInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.LayoutInflater;
@@ -88,15 +89,28 @@ public class LegacyCameraConnectionFragment extends Fragment {
                 && focusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
               parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
             }
-            List<Camera.Size> cameraSizes = parameters.getSupportedPreviewSizes();
+            List<Camera.Size> cameraSizes = parameters.getSupportedPictureSizes();
             Size[] sizes = new Size[cameraSizes.size()];
             int i = 0;
             for (Camera.Size size : cameraSizes) {
               sizes[i++] = new Size(size.width, size.height);
+              Log.i("sizu %s",  String.valueOf(sizes[i - 1].getHeight()));
+            }
+            Size pictureSize =
+                CameraConnectionFragment.chooseOptimalSize(
+                    sizes, 3264, 2448);
+            parameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
+
+
+            cameraSizes = parameters.getSupportedPreviewSizes();
+            sizes = new Size[cameraSizes.size()];
+            i = 0;
+            for (Camera.Size size : cameraSizes) {
+              sizes[i++] = new Size(size.width, size.height);
             }
             Size previewSize =
-                CameraConnectionFragment.chooseOptimalSize(
-                    sizes, desiredSize.getWidth(), desiredSize.getHeight());
+                    CameraConnectionFragment.chooseOptimalSize(
+                            sizes, desiredSize.getWidth(), desiredSize.getHeight());
             parameters.setPreviewSize(previewSize.getWidth(), previewSize.getHeight());
             camera.setDisplayOrientation(90);
             camera.setParameters(parameters);
@@ -106,7 +120,7 @@ public class LegacyCameraConnectionFragment extends Fragment {
           }
 
           camera.setPreviewCallbackWithBuffer(imageListener);
-          Camera.Size s = camera.getParameters().getPreviewSize();
+          Camera.Size s = camera.getParameters().getPictureSize();
           camera.addCallbackBuffer(new byte[ImageUtils.getYUVByteSize(s.height, s.width)]);
 
           textureView.setAspectRatio(s.height, s.width);
